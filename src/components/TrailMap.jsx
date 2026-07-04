@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
+import { loadTrailsGeoJSON } from '../lib/trails'
 
 // Free vector tiles, no API key required
 const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty'
@@ -12,9 +13,20 @@ const MAX_BOUNDS = [
   [-98.5, 43.5],
 ]
 
-function TrailMap() {
+const DIFFICULTY_COLORS = [
+  'match',
+  ['get', 'difficulty'],
+  'easy',
+  '#059669',
+  'moderate',
+  '#d97706',
+  '#dc2626', // hard
+]
+
+function TrailMap({ trailsVersion }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
+  const [mapReady, setMapReady] = useState(false)
 
   useEffect(() => {
     const map = new maplibregl.Map({
@@ -38,12 +50,55 @@ function TrailMap() {
       'top-right',
     )
 
+    map.on('load', () => setMapReady(true))
     mapRef.current = map
     return () => {
       map.remove()
       mapRef.current = null
+      setMapReady(false)
     }
   }, [])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!mapReady || !trailsVersion || !map) return
+    let cancelled = false
+
+    loadTrailsGeoJSON().then((fc) => {
+      if (cancelled || !mapRef.current) return
+      const source = map.getSource('trails')
+      if (source) {
+        source.setData(fc)
+        return
+      }
+      map.addSource('trails', { type: 'geojson', data: fc })
+      map.addLayer({
+        id: 'trails-line',
+        type: 'line',
+        source: 'trails',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': DIFFICULTY_COLORS,
+          'line-width': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            8,
+            0.75,
+            12,
+            2,
+            16,
+            4,
+          ],
+          'line-opacity': 0.85,
+        },
+      })
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [mapReady, trailsVersion])
 
   return <div ref={containerRef} className="h-full w-full" />
 }
