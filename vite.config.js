@@ -30,10 +30,36 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // trail data (data/*.json) is deliberately NOT precached — it goes
+        // to IndexedDB via the Download button; the map style IS precached
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2}', 'map-style/*.json'],
         // maplibre-gl alone is ~800 KB minified; the default 2 MB precache
         // limit is too tight for comfort once trail code lands on top of it
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        runtimeCaching: [
+          {
+            // sprite, glyphs, natural-earth raster: stable URLs, safe to
+            // cache-first (vector tiles are NOT here — they go through the
+            // ofm:// protocol with z/x/y-normalized keys in tileCache.js)
+            urlPattern: /^https:\/\/tiles\.openfreemap\.org\/(fonts|sprites|natural_earth)\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'map-assets',
+              expiration: { maxEntries: 600 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            // TileJSON: small, changes weekly; prefer fresh but keep a copy
+            urlPattern: /^https:\/\/tiles\.openfreemap\.org\/planet$/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'map-tilejson',
+              expiration: { maxEntries: 4 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
       },
     }),
   ],

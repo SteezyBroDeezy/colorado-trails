@@ -370,6 +370,8 @@ const manifest = {
   regions: [],
 }
 
+const BBOX_PAD = 0.05
+
 for (const r of [...REGIONS, { id: 'other', name: 'Other' }]) {
   const features = byRegion.get(r.id) ?? []
   if (!features.length) continue
@@ -377,12 +379,32 @@ for (const r of [...REGIONS, { id: 'other', name: 'Other' }]) {
   const file = `trails-${r.id}.json`
   const body = JSON.stringify({ type: 'FeatureCollection', features })
   await writeFile(`public/data/${file}`, body)
+  // data bbox (padded) — used by the app for offline tile downloads
+  let w = Infinity, s = Infinity, e = -Infinity, n = -Infinity
+  for (const f of features) {
+    const coords =
+      f.geometry.type === 'LineString'
+        ? [f.geometry.coordinates]
+        : f.geometry.coordinates
+    const [fw, fs, fe, fn] = lineBbox(coords)
+    if (fw < w) w = fw
+    if (fs < s) s = fs
+    if (fe > e) e = fe
+    if (fn > n) n = fn
+  }
+  const round = (v) => Math.round(v * 100) / 100
   manifest.regions.push({
     id: r.id,
     name: r.name,
     file,
     count: features.length,
     bytes: Buffer.byteLength(body),
+    bbox: [
+      round(w - BBOX_PAD),
+      round(s - BBOX_PAD),
+      round(e + BBOX_PAD),
+      round(n + BBOX_PAD),
+    ],
   })
   console.log(`wrote public/data/${file} (${features.length} trails, ${(Buffer.byteLength(body) / 1e6).toFixed(1)} MB)`)
 }

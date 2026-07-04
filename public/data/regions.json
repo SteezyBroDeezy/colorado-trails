@@ -7,49 +7,91 @@
       "name": "Front Range",
       "file": "trails-front-range.json",
       "count": 3851,
-      "bytes": 6766095
+      "bytes": 6766095,
+      "bbox": [
+        -106.15,
+        38.42,
+        -104.38,
+        41.06
+      ]
     },
     {
       "id": "san-juans",
       "name": "San Juans",
       "file": "trails-san-juans.json",
       "count": 2115,
-      "bytes": 5303673
+      "bytes": 5303673,
+      "bbox": [
+        -109.11,
+        36.94,
+        -106.28,
+        38.84
+      ]
     },
     {
       "id": "western-slope",
       "name": "Western Slope",
       "file": "trails-western-slope.json",
       "count": 2357,
-      "bytes": 3870815
+      "bytes": 3870815,
+      "bbox": [
+        -109.11,
+        38.42,
+        -107.21,
+        39.6
+      ]
     },
     {
       "id": "central-mountains",
       "name": "Central Mountains",
       "file": "trails-central-mountains.json",
       "count": 3191,
-      "bytes": 5612000
+      "bytes": 5612000,
+      "bbox": [
+        -107.66,
+        38.22,
+        -105.53,
+        40.08
+      ]
     },
     {
       "id": "northwest",
       "name": "Northwest",
       "file": "trails-northwest.json",
       "count": 1559,
-      "bytes": 3023068
+      "bytes": 3023068,
+      "bbox": [
+        -109.1,
+        39.43,
+        -105.84,
+        41.05
+      ]
     },
     {
       "id": "southeast",
       "name": "Southeast",
       "file": "trails-southeast.json",
       "count": 885,
-      "bytes": 1612253
+      "bytes": 1612253,
+      "bbox": [
+        -106.48,
+        36.94,
+        -101.99,
+        38.61
+      ]
     },
     {
       "id": "eastern-plains",
       "name": "Eastern Plains",
       "file": "trails-eastern-plains.json",
       "count": 22,
-      "bytes": 22951
+      "bytes": 22951,
+      "bbox": [
+        -104.39,
+        38.96,
+        -102.62,
+        40.96
+      ]
     }
   ]
 }

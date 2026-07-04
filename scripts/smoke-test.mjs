@@ -112,7 +112,62 @@ if (!Number.isFinite(first[0]) || !Number.isFinite(first[1])) {
   throw new Error('fallback destination vertex is not numeric')
 }
 
+// ---- offline map tiles: pure math + generated artifacts ----
+const { lonLatToTile, tileListForBbox } = await import('../src/lib/tileMath.js')
+
+// slippy-math fixtures
+const eq = (a, b) => a[0] === b[0] && a[1] === b[1]
+if (!eq(lonLatToTile(0, 0, 0), [0, 0])) throw new Error('tile math: z0 origin')
+if (!eq(lonLatToTile(0.1, -0.1, 1), [1, 1])) throw new Error('tile math: z1 SE quadrant')
+// Denver (105W 39.75N): x=(75/360)*4096=853.3, y=(1-ln(tan+sec)/pi)/2*4096=1554.4
+if (!eq(lonLatToTile(-105.0, 39.75, 12), [853, 1554])) {
+  throw new Error(`tile math: Denver z12 got ${lonLatToTile(-105.0, 39.75, 12)}`)
+}
+// bbox list: dedupe-free, in-range, plausible count for front-range
+const frBbox = manifest.regions.find((r) => r.id === 'front-range').bbox
+const frTiles = tileListForBbox(frBbox, 9, 12)
+if (frTiles.length < 800 || frTiles.length > 1600) {
+  throw new Error(`front-range tile count implausible: ${frTiles.length}`)
+}
+if (new Set(frTiles.map((t) => t.join('/'))).size !== frTiles.length) {
+  throw new Error('tile list contains duplicates')
+}
+for (const [z, x, y] of frTiles) {
+  if (x < 0 || y < 0 || x >= 2 ** z || y >= 2 ** z) {
+    throw new Error(`tile out of range: ${z}/${x}/${y}`)
+  }
+}
+
+// every region has a bbox that contains its trails
+for (const region of manifest.regions) {
+  const [w, s, e, n] = region.bbox
+  if (!(w < e && s < n)) throw new Error(`${region.id}: degenerate bbox`)
+  const fc = JSON.parse(await readFile(`public/data/${region.file}`, 'utf8'))
+  for (const f of fc.features.slice(0, 200)) {
+    const g = f.geometry
+    const [lon, lat] = g.type === 'LineString' ? g.coordinates[0] : g.coordinates[0][0]
+    if (lon < w || lon > e || lat < s || lat > n) {
+      throw new Error(`${region.id}: trail ${f.properties.id} outside bbox`)
+    }
+  }
+}
+
+// local style snapshot: ofm:// vector source clamped to z12, assets intact
+const style = JSON.parse(await readFile('public/map-style/liberty.json', 'utf8'))
+const vector = Object.values(style.sources).find((s) => s.type === 'vector')
+if (vector.tiles?.[0] !== 'ofm://{z}/{x}/{y}') {
+  throw new Error(`style vector tiles: ${vector.tiles?.[0]}`)
+}
+if (vector.maxzoom !== 12) throw new Error(`style maxzoom: ${vector.maxzoom}`)
+if (!style.glyphs?.startsWith('https://tiles.openfreemap.org/fonts/')) {
+  throw new Error(`style glyphs: ${style.glyphs}`)
+}
+if (!style.sprite?.startsWith('https://tiles.openfreemap.org/sprites/')) {
+  throw new Error(`style sprite: ${style.sprite}`)
+}
+
 console.log(
-  `OK: ${stored} trails stored, shapes valid, search index + backfill + queries work, trailheads sane, re-put idempotent`,
+  `OK: ${stored} trails stored, shapes valid, search index + backfill + queries work, ` +
+    `trailheads sane, tile math + style + region bboxes valid, re-put idempotent`,
 )
 process.exit(0)

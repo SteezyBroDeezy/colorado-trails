@@ -3,6 +3,7 @@ import TrailMap from './components/TrailMap'
 import DownloadCard from './components/DownloadCard'
 import SearchPanel from './components/SearchPanel'
 import TrailDetail from './components/TrailDetail'
+import OfflineMapsSheet from './components/OfflineMapsSheet'
 import { ensureTrailIndex, getTrail } from './lib/trails'
 
 function App() {
@@ -11,6 +12,7 @@ function App() {
   // bumped whenever the trail set in Dexie changes, so the map redraws
   const [trailsVersion, setTrailsVersion] = useState(0)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [offlineOpen, setOfflineOpen] = useState(false)
   const [selected, setSelected] = useState(null) // full trail row (with geometry)
 
   useEffect(() => {
@@ -59,8 +61,27 @@ function App() {
           selected={selected}
           onSelectId={handleSelectId}
         />
-        {selected && !searchOpen && (
+        {trailCount > 0 && !selected && !searchOpen && !offlineOpen && (
+          <button
+            type="button"
+            onClick={() => setOfflineOpen(true)}
+            aria-label="Offline maps"
+            title="Offline maps"
+            className="absolute bottom-6 left-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white text-emerald-800 shadow-lg active:bg-gray-100"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 3v10" />
+              <path d="m8 9 4 4 4-4" />
+              <path d="M4 17h16" />
+              <path d="M4 21h16" />
+            </svg>
+          </button>
+        )}
+        {selected && !searchOpen && !offlineOpen && (
           <TrailDetail trail={selected} onClose={() => setSelected(null)} />
+        )}
+        {offlineOpen && (
+          <OfflineMapsSheet onClose={() => setOfflineOpen(false)} />
         )}
         {searchOpen && (
           <SearchPanel

@@ -2,9 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { loadTrailsGeoJSON } from '../lib/trails'
+import { registerOfmProtocol } from '../lib/tileCache'
 
-// Free vector tiles, no API key required
-const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty'
+// Local snapshot of the OpenFreeMap liberty style; its vector source
+// uses our ofm:// protocol so tiles are cached offline by z/x/y
+// (regen with: node scripts/fetch-map-style.mjs)
+const MAP_STYLE = '/map-style/liberty.json'
 
 const COLORADO_CENTER = [-105.55, 39.0]
 // Keep users roughly over Colorado (with a little margin for context)
@@ -73,6 +76,7 @@ function TrailMap({ trailsVersion, selected, onSelectId }) {
   onSelectIdRef.current = onSelectId
 
   useEffect(() => {
+    registerOfmProtocol()
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: MAP_STYLE,
