@@ -7,7 +7,7 @@ import { registerOfmProtocol } from '../lib/tileCache'
 // Local snapshot of the OpenFreeMap liberty style; its vector source
 // uses our ofm:// protocol so tiles are cached offline by z/x/y
 // (regen with: node scripts/fetch-map-style.mjs)
-const MAP_STYLE = '/map-style/liberty.json'
+const MAP_STYLE = `${import.meta.env?.BASE_URL ?? '/'}map-style/liberty.json`
 
 const COLORADO_CENTER = [-105.55, 39.0]
 // Keep users roughly over Colorado (with a little margin for context)

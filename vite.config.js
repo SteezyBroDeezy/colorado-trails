@@ -5,6 +5,9 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
+  // GitHub Pages serves the site under /colorado-trails/ — the deploy
+  // workflow sets DEPLOY_BASE; local dev/preview stay at /
+  base: process.env.DEPLOY_BASE ?? '/',
   plugins: [
     react(),
     tailwindcss(),

@@ -24,8 +24,11 @@ function toIndexRow(t) {
   }
 }
 
+// app may be served from a sub-path (e.g. GitHub Pages project site)
+const BASE = import.meta.env?.BASE_URL ?? '/'
+
 export async function fetchManifest() {
-  const res = await fetch('/data/regions.json')
+  const res = await fetch(`${BASE}data/regions.json`)
   if (!res.ok) throw new Error(`manifest fetch failed: ${res.status}`)
   return res.json()
 }
@@ -34,7 +37,7 @@ export async function downloadTrails(onProgress) {
   const manifest = await fetchManifest()
   let done = 0
   for (const region of manifest.regions) {
-    const res = await fetch(`/data/${region.file}`)
+    const res = await fetch(`${BASE}data/${region.file}`)
     if (!res.ok) throw new Error(`${region.file} fetch failed: ${res.status}`)
     const fc = await res.json()
     const rows = fc.features.map((f) => ({
