@@ -11,6 +11,7 @@
 //   4. assigns a region and writes chunked GeoJSON to public/data/
 import { mkdir, writeFile } from 'node:fs/promises'
 import { FOURTEENERS } from './fourteeners.mjs'
+import * as terrain from './terrain.mjs'
 
 const BASE =
   'https://gis.colorado.gov/public/rest/services/OIT/Colorado_State_Basemap/MapServer/40/query'
@@ -288,6 +289,51 @@ function summitsFor(lines) {
   return [...found.values()]
 }
 
+// -------------------------------------------------------------- elevation
+
+// Hysteresis threshold: ignore vertical wiggles under ~5 m (terrain
+// raster noise), accumulate everything bigger as real climbing.
+const GAIN_NOISE_FT = 16.4
+
+let elevAt = () => null // set after terrain.resolve()
+
+function elevationStats(lines) {
+  let minFt = Infinity
+  let maxFt = -Infinity
+  const lineGains = []
+  for (const line of lines) {
+    let gain = 0
+    let ref = null
+    for (const [lon, lat] of line) {
+      const e = elevAt(lon, lat)
+      if (e == null) return null // tile failed -> caller falls back
+      if (e < minFt) minFt = e
+      if (e > maxFt) maxFt = e
+      if (ref == null) {
+        ref = e
+      } else if (e > ref + GAIN_NOISE_FT) {
+        gain += e - ref
+        ref = e
+      } else if (e < ref - GAIN_NOISE_FT) {
+        ref = e
+      }
+    }
+    lineGains.push(gain)
+  }
+  // linear/loop: climb along the path. Networks: path-sums overstate
+  // (you don't hike every branch), so use the larger of elevation span
+  // and the biggest single branch climb.
+  const gain =
+    lines.length === 1
+      ? lineGains[0]
+      : Math.max(maxFt - minFt, ...lineGains)
+  return {
+    gainFt: Math.round(gain),
+    minElevFt: Math.round(minFt),
+    maxElevFt: Math.round(maxFt),
+  }
+}
+
 // ------------------------------------------------------------- route type
 
 const LOOP_CLOSE_MI = 0.0373 // 60 m
@@ -334,11 +380,22 @@ function mergeCluster(segments) {
   }
   lengthMi = Math.round(Math.max(lengthMi, geomMi) * 10) / 10
 
-  const minVals = segments.map((s) => s.attrs.min_elevat).filter((v) => v > 0)
-  const maxVals = segments.map((s) => s.attrs.max_elevat).filter((v) => v > 0)
-  const minElev = minVals.length ? Math.round(Math.min(...minVals)) : null
-  const maxElev = maxVals.length ? Math.round(Math.max(...maxVals)) : null
-  const gainFt = minElev != null && maxElev != null ? Math.max(0, maxElev - minElev) : null
+  // real elevation from terrain tiles; COTREX's own elevation fields
+  // are too sparse (statewide, ZERO trails showed >=2500 ft gain from
+  // them). Fall back to those fields only if terrain sampling failed.
+  let stats = elevationStats(lines)
+  if (!stats) {
+    const minVals = segments.map((s) => s.attrs.min_elevat).filter((v) => v > 0)
+    const maxVals = segments.map((s) => s.attrs.max_elevat).filter((v) => v > 0)
+    const minElev = minVals.length ? Math.round(Math.min(...minVals)) : null
+    const maxElev = maxVals.length ? Math.round(Math.max(...maxVals)) : null
+    stats = {
+      minElevFt: minElev,
+      maxElevFt: maxElev,
+      gainFt: minElev != null && maxElev != null ? Math.max(0, maxElev - minElev) : null,
+    }
+  }
+  const { minElevFt: minElev, maxElevFt: maxElev, gainFt } = stats
 
   const geometry =
     lines.length === 1
@@ -458,6 +515,20 @@ for (let offset = 0; ; offset += PAGE_SIZE) {
   if (!page.features.length || page.features.length < PAGE_SIZE) break
 }
 
+// sample real elevation for every vertex (each terrain tile fetched and
+// decoded exactly once; disk-cached in scripts/.terrain-cache)
+for (const segments of groups.values()) {
+  for (const seg of segments) {
+    for (const line of seg.lines) {
+      for (const [lon, lat] of line) terrain.collect(lon, lat)
+    }
+  }
+}
+console.log(`sampling elevation from ${terrain.tileCount()} terrain tiles...`)
+elevAt = await terrain.resolve((done, total) =>
+  console.log(`  terrain ${done}/${total}`),
+)
+
 const byRegion = new Map()
 let trailCount = 0
 for (const segments of groups.values()) {
@@ -473,7 +544,9 @@ console.log(`merged ${segmentCount} segments -> ${trailCount} trails`)
 
 await mkdir('public/data', { recursive: true })
 const manifest = {
-  generated: new Date().toISOString().slice(0, 10),
+  // full timestamp: the app detects data updates by exact string
+  // compare, and date-only granularity hid same-day regenerations
+  generated: new Date().toISOString(),
   source: 'COTREX (Colorado Parks & Wildlife / gis.colorado.gov)',
   regions: [],
 }

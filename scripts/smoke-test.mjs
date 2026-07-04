@@ -188,6 +188,15 @@ const quandary = idx.find((t) => t.name === 'Quandary Trail')
 if (!quandary?.is14er || !quandary.summits?.includes('Quandary Peak')) {
   throw new Error(`Quandary Trail not tagged as 14er: ${JSON.stringify(quandary)}`)
 }
+// terrain-derived gain: Quandary's standard route climbs ~3,450 ft
+if (!(quandary.gainFt >= 2500 && quandary.gainFt <= 4500)) {
+  throw new Error(`Quandary gain implausible: ${quandary.gainFt} ft`)
+}
+const bigGain = idx.filter((t) => t.gainFt >= 2500).length
+if (bigGain < 50 || bigGain > 3000) {
+  throw new Error(`implausible count of 2500+ ft gain trails: ${bigGain}`)
+}
+console.log(`gain>=2500ft trails: ${bigGain}, Quandary gain ${quandary.gainFt} ft`)
 console.log(
   `route types ${JSON.stringify(rtCounts)}, ${nSummit} summit trails, ${n14} 14er trails`,
 )

@@ -1,5 +1,5 @@
 {
-  "generated": "2026-07-04",
+  "generated": "2026-07-04T21:30:53.377Z",
   "source": "COTREX (Colorado Parks & Wildlife / gis.colorado.gov)",
   "regions": [
     {
@@ -7,7 +7,7 @@
       "name": "Front Range",
       "file": "trails-front-range.json",
       "count": 3851,
-      "bytes": 6977055,
+      "bytes": 6979239,
       "bbox": [
         -106.15,
         38.42,
@@ -20,7 +20,7 @@
       "name": "San Juans",
       "file": "trails-san-juans.json",
       "count": 2115,
-      "bytes": 5420945,
+      "bytes": 5422653,
       "bbox": [
         -109.11,
         36.94,
@@ -33,7 +33,7 @@
       "name": "Western Slope",
       "file": "trails-western-slope.json",
       "count": 2357,
-      "bytes": 3999548,
+      "bytes": 4000484,
       "bbox": [
         -109.11,
         38.42,
@@ -46,7 +46,7 @@
       "name": "Central Mountains",
       "file": "trails-central-mountains.json",
       "count": 3191,
-      "bytes": 5789946,
+      "bytes": 5792280,
       "bbox": [
         -107.66,
         38.22,
@@ -59,7 +59,7 @@
       "name": "Northwest",
       "file": "trails-northwest.json",
       "count": 1559,
-      "bytes": 3109556,
+      "bytes": 3110258,
       "bbox": [
         -109.1,
         39.43,
@@ -72,7 +72,7 @@
       "name": "Southeast",
       "file": "trails-southeast.json",
       "count": 885,
-      "bytes": 1661105,
+      "bytes": 1661410,
       "bbox": [
         -106.48,
         36.94,
@@ -85,7 +85,7 @@
       "name": "Eastern Plains",
       "file": "trails-eastern-plains.json",
       "count": 22,
-      "bytes": 24183,
+      "bytes": 24188,
       "bbox": [
         -104.39,
         38.96,

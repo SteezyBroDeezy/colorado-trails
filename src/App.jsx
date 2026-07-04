@@ -7,6 +7,7 @@ import OfflineMapsSheet from './components/OfflineMapsSheet'
 import UpdateBanner from './components/UpdateBanner'
 import ConditionsControl from './components/ConditionsControl'
 import ListsPanel from './components/ListsPanel'
+import DataUpdateBanner from './components/DataUpdateBanner'
 import { ensureTrailIndex, getTrail } from './lib/trails'
 
 function App() {
@@ -97,6 +98,14 @@ function App() {
 
       <main className="relative flex-1">
         <UpdateBanner />
+        {trailCount > 0 && (
+          <DataUpdateBanner
+            onUpdated={(count) => {
+              setTrailCount(count)
+              setTrailsVersion((v) => v + 1)
+            }}
+          />
+        )}
         <TrailMap
           trailsVersion={trailsVersion}
           selected={selected}
