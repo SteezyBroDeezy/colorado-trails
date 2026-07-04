@@ -4,6 +4,7 @@ import DownloadCard from './components/DownloadCard'
 import SearchPanel from './components/SearchPanel'
 import TrailDetail from './components/TrailDetail'
 import OfflineMapsSheet from './components/OfflineMapsSheet'
+import UpdateBanner from './components/UpdateBanner'
 import { ensureTrailIndex, getTrail } from './lib/trails'
 
 function App() {
@@ -56,6 +57,7 @@ function App() {
       )}
 
       <main className="relative flex-1">
+        <UpdateBanner />
         <TrailMap
           trailsVersion={trailsVersion}
           selected={selected}
