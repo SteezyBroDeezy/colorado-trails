@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#022c22"/>
+  <!-- back peak -->
+  <path d="M96 388 L232 168 L318 308 L280 388 Z" fill="#059669"/>
+  <path d="M232 168 L268 226 L246 220 L232 240 L214 214 Z" fill="#ecfdf5"/>
+  <!-- front peak -->
+  <path d="M208 388 L330 196 L448 388 Z" fill="#10b981"/>
+  <path d="M330 196 L362 246 L342 238 L326 258 L308 240 Z" fill="#ffffff"/>
+  <!-- sun -->
+  <circle cx="140" cy="140" r="44" fill="#fbbf24"/>
+</svg>
