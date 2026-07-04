@@ -7,3 +7,11 @@ db.version(1).stores({
   trails: 'id, name, region, difficulty, lengthMi',
   meta: 'key',
 })
+
+// v2: trailIndex = geometry-free copy of search/list fields, so search
+// never has to deserialize 26 MB of coordinates
+db.version(2).stores({
+  trails: 'id, name, region, difficulty, lengthMi',
+  trailIndex: 'id, name',
+  meta: 'key',
+})

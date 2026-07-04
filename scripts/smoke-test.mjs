@@ -15,7 +15,8 @@ globalThis.fetch = async (url) => {
   }
 }
 
-const { downloadTrails, getTrailCount } = await import('../src/lib/trails.js')
+const { downloadTrails, getTrailCount, ensureTrailIndex, getTrailIndex, getTrail } =
+  await import('../src/lib/trails.js')
 const { db } = await import('../src/db.js')
 
 const manifest = JSON.parse(await readFile('public/data/regions.json', 'utf8'))
@@ -61,5 +62,40 @@ if (after !== stored) {
   throw new Error(`re-put changed count: ${stored} -> ${after}`)
 }
 
-console.log(`OK: ${stored} trails stored, shapes valid, indexes work, re-put idempotent`)
+// search index: populated by download, geometry-free, backfillable
+const idxCount = await db.trailIndex.count()
+if (idxCount !== stored) {
+  throw new Error(`trailIndex count ${idxCount} != trails ${stored}`)
+}
+const idxSample = await db.trailIndex.limit(20).toArray()
+for (const row of idxSample) {
+  if ('geometry' in row) throw new Error(`index row ${row.id} carries geometry`)
+  if (row.name == null || row.lengthMi == null || row.difficulty == null) {
+    throw new Error(`index row ${row.id} missing search fields`)
+  }
+}
+await db.trailIndex.clear()
+await ensureTrailIndex()
+const backfilled = await db.trailIndex.count()
+if (backfilled !== stored) {
+  throw new Error(`backfill produced ${backfilled}, expected ${stored}`)
+}
+
+// a search the panel would run: substring + difficulty + length filters
+const index = await getTrailIndex()
+const hits = index.filter(
+  (t) =>
+    t.name.toLowerCase().includes('lake') &&
+    t.difficulty === 'moderate' &&
+    t.lengthMi >= 2 &&
+    t.lengthMi <= 5,
+)
+console.log(`search "lake" moderate 2-5mi: ${hits.length} hits`)
+if (!hits.length) throw new Error('search over index returned nothing')
+const full = await getTrail(hits[0].id)
+if (!full?.geometry) throw new Error('getTrail missing geometry for search hit')
+
+console.log(
+  `OK: ${stored} trails stored, shapes valid, search index + backfill + queries work, re-put idempotent`,
+)
 process.exit(0)

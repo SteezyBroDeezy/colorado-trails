@@ -1,20 +1,30 @@
 import { useEffect, useState } from 'react'
 import TrailMap from './components/TrailMap'
 import DownloadCard from './components/DownloadCard'
-import { getTrailCount } from './lib/trails'
+import SearchPanel from './components/SearchPanel'
+import { ensureTrailIndex, getTrail } from './lib/trails'
 
 function App() {
   // null = still checking IndexedDB, 0 = no data yet
   const [trailCount, setTrailCount] = useState(null)
   // bumped whenever the trail set in Dexie changes, so the map redraws
   const [trailsVersion, setTrailsVersion] = useState(0)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [selected, setSelected] = useState(null) // full trail row (with geometry)
 
   useEffect(() => {
-    getTrailCount().then((count) => {
+    // also backfills the search index for pre-v2 downloads
+    ensureTrailIndex().then((count) => {
       setTrailCount(count)
       if (count > 0) setTrailsVersion(1)
     })
   }, [])
+
+  async function handleSelect(indexRow) {
+    const trail = await getTrail(indexRow.id)
+    setSelected(trail)
+    setSearchOpen(false)
+  }
 
   return (
     <div className="flex h-dvh flex-col">
@@ -29,8 +39,27 @@ function App() {
           </span>
         )}
       </header>
+
+      {trailCount > 0 && (
+        <div className="z-10 bg-emerald-950 px-3 pb-3">
+          <button
+            type="button"
+            onClick={() => setSearchOpen(true)}
+            className="w-full rounded-xl bg-emerald-900 px-4 py-2.5 text-left text-emerald-200/90"
+          >
+            {selected ? selected.name : 'Search trails by name…'}
+          </button>
+        </div>
+      )}
+
       <main className="relative flex-1">
-        <TrailMap trailsVersion={trailsVersion} />
+        <TrailMap trailsVersion={trailsVersion} selected={selected} />
+        {searchOpen && (
+          <SearchPanel
+            onSelect={handleSelect}
+            onClose={() => setSearchOpen(false)}
+          />
+        )}
         {trailCount === 0 && (
           <DownloadCard
             onDownloaded={(count) => {

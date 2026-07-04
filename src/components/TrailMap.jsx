@@ -13,6 +13,8 @@ const MAX_BOUNDS = [
   [-98.5, 43.5],
 ]
 
+const EMPTY_FC = { type: 'FeatureCollection', features: [] }
+
 const DIFFICULTY_COLORS = [
   'match',
   ['get', 'difficulty'],
@@ -23,7 +25,47 @@ const DIFFICULTY_COLORS = [
   '#dc2626', // hard
 ]
 
-function TrailMap({ trailsVersion }) {
+function geometryBounds(geometry) {
+  const lines =
+    geometry.type === 'LineString' ? [geometry.coordinates] : geometry.coordinates
+  const bounds = new maplibregl.LngLatBounds()
+  for (const line of lines) {
+    for (const coord of line) bounds.extend(coord)
+  }
+  return bounds
+}
+
+function ensureSelectedLayers(map) {
+  if (!map.getSource('selected')) {
+    map.addSource('selected', { type: 'geojson', data: EMPTY_FC })
+    map.addLayer({
+      id: 'selected-halo',
+      type: 'line',
+      source: 'selected',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': '#ffffff',
+        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 5, 14, 9],
+      },
+    })
+    map.addLayer({
+      id: 'selected-line',
+      type: 'line',
+      source: 'selected',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': '#2563eb',
+        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 2.5, 14, 5],
+      },
+    })
+  } else {
+    // keep selection above the trails layer after it (re)loads
+    map.moveLayer('selected-halo')
+    map.moveLayer('selected-line')
+  }
+}
+
+function TrailMap({ trailsVersion, selected }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const [mapReady, setMapReady] = useState(false)
@@ -69,36 +111,58 @@ function TrailMap({ trailsVersion }) {
       const source = map.getSource('trails')
       if (source) {
         source.setData(fc)
-        return
+      } else {
+        map.addSource('trails', { type: 'geojson', data: fc })
+        map.addLayer({
+          id: 'trails-line',
+          type: 'line',
+          source: 'trails',
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+          paint: {
+            'line-color': DIFFICULTY_COLORS,
+            'line-width': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              8,
+              0.75,
+              12,
+              2,
+              16,
+              4,
+            ],
+            'line-opacity': 0.85,
+          },
+        })
       }
-      map.addSource('trails', { type: 'geojson', data: fc })
-      map.addLayer({
-        id: 'trails-line',
-        type: 'line',
-        source: 'trails',
-        layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: {
-          'line-color': DIFFICULTY_COLORS,
-          'line-width': [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
-            8,
-            0.75,
-            12,
-            2,
-            16,
-            4,
-          ],
-          'line-opacity': 0.85,
-        },
-      })
+      ensureSelectedLayers(map)
     })
 
     return () => {
       cancelled = true
     }
   }, [mapReady, trailsVersion])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!mapReady || !map) return
+    ensureSelectedLayers(map)
+    const source = map.getSource('selected')
+    if (!selected) {
+      source.setData(EMPTY_FC)
+      return
+    }
+    source.setData({
+      type: 'Feature',
+      geometry: selected.geometry,
+      properties: {},
+    })
+    map.fitBounds(geometryBounds(selected.geometry), {
+      padding: 60,
+      maxZoom: 14,
+      duration: 800,
+    })
+  }, [mapReady, selected])
 
   return <div ref={containerRef} className="h-full w-full" />
 }
