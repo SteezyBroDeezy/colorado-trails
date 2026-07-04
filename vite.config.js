@@ -36,6 +36,9 @@ export default defineConfig({
         // trail data (data/*.json) is deliberately NOT precached — it goes
         // to IndexedDB via the Download button; the map style IS precached
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}', 'map-style/*.json'],
+        // firebase's lazy chunks build as index.esm-*.js — they only load
+        // during sign-in/sync (online by definition), so don't precache
+        globIgnores: ['**/index.esm-*.js'],
         // maplibre-gl alone is ~800 KB minified; the default 2 MB precache
         // limit is too tight for comfort once trail code lands on top of it
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,

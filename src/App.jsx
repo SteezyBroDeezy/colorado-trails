@@ -5,6 +5,8 @@ import SearchPanel from './components/SearchPanel'
 import TrailDetail from './components/TrailDetail'
 import OfflineMapsSheet from './components/OfflineMapsSheet'
 import UpdateBanner from './components/UpdateBanner'
+import ConditionsControl from './components/ConditionsControl'
+import ListsPanel from './components/ListsPanel'
 import { ensureTrailIndex, getTrail } from './lib/trails'
 
 function App() {
@@ -14,7 +16,18 @@ function App() {
   const [trailsVersion, setTrailsVersion] = useState(0)
   const [searchOpen, setSearchOpen] = useState(false)
   const [offlineOpen, setOfflineOpen] = useState(false)
+  const [listsOpen, setListsOpen] = useState(false)
   const [selected, setSelected] = useState(null) // full trail row (with geometry)
+  // wildfire overlay: opt-in, remembered across sessions
+  const [conditionsOn, setConditionsOn] = useState(
+    () => localStorage.getItem('conditionsOn') === '1',
+  )
+  const [conditionsVersion, setConditionsVersion] = useState(0)
+
+  function toggleConditions(on) {
+    setConditionsOn(on)
+    localStorage.setItem('conditionsOn', on ? '1' : '0')
+  }
 
   useEffect(() => {
     // also backfills the search index for pre-v2 downloads
@@ -24,7 +37,12 @@ function App() {
     })
   }, [])
 
-  async function handleSelectId(id) {
+  // toggle=true (map taps): tapping the selected trail again deselects it
+  async function handleSelectId(id, toggle = false) {
+    if (toggle && selected?.id === id) {
+      setSelected(null)
+      return
+    }
     const trail = await getTrail(id)
     setSelected(trail)
     setSearchOpen(false)
@@ -46,6 +64,23 @@ function App() {
             {trailCount.toLocaleString()} trails offline
           </span>
         )}
+        {trailCount > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              setListsOpen(true)
+              setSearchOpen(false)
+              setOfflineOpen(false)
+            }}
+            aria-label="My lists"
+            title="My lists"
+            className="rounded-full bg-emerald-800 p-1.5 text-emerald-100 active:bg-emerald-700"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M6 2h12a1 1 0 0 1 1 1v19l-7-4.5L5 22V3a1 1 0 0 1 1-1z" />
+            </svg>
+          </button>
+        )}
       </header>
 
       {trailCount > 0 && (
@@ -65,8 +100,17 @@ function App() {
         <TrailMap
           trailsVersion={trailsVersion}
           selected={selected}
-          onSelectId={handleSelectId}
+          onSelectId={(id) => handleSelectId(id, true)}
+          conditionsOn={conditionsOn}
+          conditionsVersion={conditionsVersion}
         />
+        {trailCount > 0 && !searchOpen && !offlineOpen && (
+          <ConditionsControl
+            on={conditionsOn}
+            onToggle={toggleConditions}
+            onDataChanged={() => setConditionsVersion((v) => v + 1)}
+          />
+        )}
         {trailCount > 0 && !selected && !searchOpen && !offlineOpen && (
           <button
             type="button"
@@ -87,12 +131,27 @@ function App() {
           <TrailDetail trail={selected} onClose={() => setSelected(null)} />
         )}
         {offlineOpen && (
-          <OfflineMapsSheet onClose={() => setOfflineOpen(false)} />
+          <OfflineMapsSheet
+            onClose={() => setOfflineOpen(false)}
+            onTrailsUpdated={(count) => {
+              setTrailCount(count)
+              setTrailsVersion((v) => v + 1)
+            }}
+          />
         )}
         {searchOpen && (
           <SearchPanel
             onSelect={(row) => handleSelectId(row.id)}
             onClose={() => setSearchOpen(false)}
+          />
+        )}
+        {listsOpen && (
+          <ListsPanel
+            onSelectTrail={(id) => {
+              setListsOpen(false)
+              handleSelectId(id)
+            }}
+            onClose={() => setListsOpen(false)}
           />
         )}
         {trailCount === 0 && (

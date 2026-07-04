@@ -15,3 +15,13 @@ db.version(2).stores({
   trailIndex: 'id, name',
   meta: 'key',
 })
+
+// v3: alerts = synced wildfire/conditions features; lists = saved trail
+// lists (soft-deleted via deletedAt so removals can sync)
+db.version(3).stores({
+  trails: 'id, name, region, difficulty, lengthMi',
+  trailIndex: 'id, name',
+  alerts: 'id, kind',
+  lists: 'id, name, updatedAt',
+  meta: 'key',
+})

@@ -21,6 +21,9 @@ function toIndexRow(t) {
     region: t.region,
     manager: t.manager,
     surface: t.surface,
+    routeType: t.routeType ?? null,
+    summits: t.summits ?? null,
+    is14er: t.is14er ?? false,
   }
 }
 
@@ -36,6 +39,7 @@ export async function fetchManifest() {
 export async function downloadTrails(onProgress) {
   const manifest = await fetchManifest()
   let done = 0
+  const newIds = new Set()
   for (const region of manifest.regions) {
     const res = await fetch(`${BASE}data/${region.file}`)
     if (!res.ok) throw new Error(`${region.file} fetch failed: ${res.status}`)
@@ -44,10 +48,19 @@ export async function downloadTrails(onProgress) {
       ...f.properties,
       geometry: f.geometry,
     }))
+    for (const r of rows) newIds.add(r.id)
     await db.trails.bulkPut(rows)
     await db.trailIndex.bulkPut(rows.map(toIndexRow))
     done++
     onProgress?.(done / manifest.regions.length, region.name)
+  }
+  // drop trails that no longer exist in the source data
+  const staleIds = (await db.trails.toCollection().primaryKeys()).filter(
+    (id) => !newIds.has(id),
+  )
+  if (staleIds.length) {
+    await db.trails.bulkDelete(staleIds)
+    await db.trailIndex.bulkDelete(staleIds)
   }
   await db.meta.bulkPut([
     { key: 'downloadedAt', value: new Date().toISOString() },
@@ -104,6 +117,7 @@ export async function loadTrailsGeoJSON() {
         name: t.name,
         difficulty: t.difficulty,
         lengthMi: t.lengthMi,
+        is14er: t.is14er ?? false,
       },
     })),
   }

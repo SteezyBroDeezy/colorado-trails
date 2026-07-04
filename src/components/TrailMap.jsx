@@ -3,6 +3,7 @@ import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { loadTrailsGeoJSON } from '../lib/trails'
 import { registerOfmProtocol } from '../lib/tileCache'
+import { conditionsGeoJSON } from '../lib/conditions'
 
 // Local snapshot of the OpenFreeMap liberty style; its vector source
 // uses our ofm:// protocol so tiles are cached offline by z/x/y
@@ -68,7 +69,9 @@ function ensureSelectedLayers(map) {
   }
 }
 
-function TrailMap({ trailsVersion, selected, onSelectId }) {
+const FIRE_LAYERS = ['fires-fill', 'fires-outline', 'fires-pts']
+
+function TrailMap({ trailsVersion, selected, onSelectId, conditionsOn, conditionsVersion }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const [mapReady, setMapReady] = useState(false)
@@ -119,6 +122,19 @@ function TrailMap({ trailsVersion, selected, onSelectId }) {
         source.setData(fc)
       } else {
         map.addSource('trails', { type: 'geojson', data: fc })
+        // gold casing under 14er routes so they pop at every zoom
+        map.addLayer({
+          id: 'trails-14er',
+          type: 'line',
+          source: 'trails',
+          filter: ['==', ['get', 'is14er'], true],
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+          paint: {
+            'line-color': '#facc15',
+            'line-width': ['interpolate', ['linear'], ['zoom'], 8, 4, 12, 7, 16, 12],
+            'line-opacity': 0.7,
+          },
+        })
         map.addLayer({
           id: 'trails-line',
           type: 'line',
@@ -140,14 +156,25 @@ function TrailMap({ trailsVersion, selected, onSelectId }) {
             'line-opacity': 0.85,
           },
         })
-        map.on('click', 'trails-line', (e) => {
+        // invisible fat hit-target so trails are easy to tap on a phone,
+        // including switching directly from one selected trail to another
+        map.addLayer({
+          id: 'trails-hit',
+          type: 'line',
+          source: 'trails',
+          paint: {
+            'line-color': 'rgba(0,0,0,0.001)',
+            'line-width': 18,
+          },
+        })
+        map.on('click', 'trails-hit', (e) => {
           const id = e.features?.[0]?.properties?.id
           if (id != null) onSelectIdRef.current?.(id)
         })
-        map.on('mouseenter', 'trails-line', () => {
+        map.on('mouseenter', 'trails-hit', () => {
           map.getCanvas().style.cursor = 'pointer'
         })
-        map.on('mouseleave', 'trails-line', () => {
+        map.on('mouseleave', 'trails-hit', () => {
           map.getCanvas().style.cursor = ''
         })
       }
@@ -158,6 +185,73 @@ function TrailMap({ trailsVersion, selected, onSelectId }) {
       cancelled = true
     }
   }, [mapReady, trailsVersion])
+
+  // wildfire overlay — strictly opt-in, drawn under the trail layers
+  useEffect(() => {
+    const map = mapRef.current
+    if (!mapReady || !map) return
+    if (!conditionsOn) {
+      for (const l of FIRE_LAYERS) {
+        if (map.getLayer(l)) map.setLayoutProperty(l, 'visibility', 'none')
+      }
+      return
+    }
+    let cancelled = false
+    conditionsGeoJSON().then(({ perimeters, incidents }) => {
+      if (cancelled || !mapRef.current) return
+      const beforeId = map.getLayer('trails-14er') ? 'trails-14er' : undefined
+      if (!map.getSource('fires-peri')) {
+        map.addSource('fires-peri', { type: 'geojson', data: perimeters })
+        map.addSource('fires-pts', { type: 'geojson', data: incidents })
+        map.addLayer(
+          {
+            id: 'fires-fill',
+            type: 'fill',
+            source: 'fires-peri',
+            paint: { 'fill-color': '#dc2626', 'fill-opacity': 0.18 },
+          },
+          beforeId,
+        )
+        map.addLayer(
+          {
+            id: 'fires-outline',
+            type: 'line',
+            source: 'fires-peri',
+            paint: {
+              'line-color': '#dc2626',
+              'line-width': 1.5,
+              'line-dasharray': [2, 1],
+            },
+          },
+          beforeId,
+        )
+        map.addLayer(
+          {
+            id: 'fires-pts',
+            type: 'circle',
+            source: 'fires-pts',
+            paint: {
+              'circle-color': '#dc2626',
+              'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 4, 12, 8],
+              'circle-stroke-color': '#ffffff',
+              'circle-stroke-width': 1.5,
+              'circle-opacity': 0.9,
+            },
+          },
+          beforeId,
+        )
+      } else {
+        map.getSource('fires-peri').setData(perimeters)
+        map.getSource('fires-pts').setData(incidents)
+      }
+      for (const l of FIRE_LAYERS) {
+        map.setLayoutProperty(l, 'visibility', 'visible')
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [mapReady, conditionsOn, conditionsVersion])
 
   useEffect(() => {
     const map = mapRef.current

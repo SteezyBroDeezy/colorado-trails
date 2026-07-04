@@ -1,28 +1,49 @@
 import { useEffect, useRef, useState } from 'react'
-import { fetchManifest } from '../lib/trails'
+import { downloadTrails, fetchManifest } from '../lib/trails'
 import {
   downloadRegion,
   deleteRegion,
   estimateRegionBytes,
   getOfflineState,
 } from '../lib/offlineMaps'
+import { db } from '../db'
 
 function fmtMb(bytes) {
   return `${(bytes / 1e6).toFixed(1)} MB`
 }
 
-function OfflineMapsSheet({ onClose }) {
+function OfflineMapsSheet({ onClose, onTrailsUpdated }) {
   const [manifest, setManifest] = useState(null)
   const [state, setState] = useState({ regions: {}, storage: null })
   const [busy, setBusy] = useState(null) // { id, pct }
   const [error, setError] = useState(null)
+  const [dataVersion, setDataVersion] = useState(null)
+  const [updating, setUpdating] = useState(false)
   const abortRef = useRef(null)
 
   useEffect(() => {
     fetchManifest().then(setManifest).catch(() => setError('Region list needs network once.'))
     getOfflineState().then(setState)
+    db.meta.get('dataVersion').then((m) => setDataVersion(m?.value ?? null))
     return () => abortRef.current?.abort()
   }, [])
+
+  const trailsOutdated =
+    manifest && dataVersion && manifest.generated !== dataVersion
+
+  async function handleTrailUpdate() {
+    setUpdating(true)
+    setError(null)
+    try {
+      const count = await downloadTrails()
+      setDataVersion(manifest.generated)
+      onTrailsUpdated?.(count)
+    } catch (err) {
+      setError(`Trail data update failed: ${err.message}`)
+    } finally {
+      setUpdating(false)
+    }
+  }
 
   async function handleDownload(region) {
     setError(null)
@@ -71,6 +92,27 @@ function OfflineMapsSheet({ onClose }) {
           Areas you browse online are saved automatically too.
         </p>
         {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+
+        {trailsOutdated && (
+          <div className="mt-3 flex items-center gap-3 rounded-xl bg-emerald-50 p-3">
+            <div className="min-w-0 flex-1 text-sm">
+              <div className="font-medium text-emerald-900">
+                Trail data update available
+              </div>
+              <div className="text-emerald-800">
+                {dataVersion} → {manifest.generated}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleTrailUpdate}
+              disabled={updating}
+              className="shrink-0 rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+            >
+              {updating ? 'Updating…' : 'Update'}
+            </button>
+          </div>
+        )}
 
         <ul className="mt-3 divide-y divide-gray-100">
           {(manifest?.regions ?? []).map((region) => {

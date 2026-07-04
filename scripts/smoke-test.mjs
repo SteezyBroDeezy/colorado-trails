@@ -166,8 +166,74 @@ if (!style.sprite?.startsWith('https://tiles.openfreemap.org/sprites/')) {
   throw new Error(`style sprite: ${style.sprite}`)
 }
 
+// ---- summits, 14ers, route types ----
+const idx = await getTrailIndex()
+const rtCounts = { loop: 0, 'out-and-back': 0, network: 0 }
+let n14 = 0
+let nSummit = 0
+for (const t of idx) {
+  if (t.routeType in rtCounts) rtCounts[t.routeType]++
+  if (t.is14er) n14++
+  if (t.summits?.length) nSummit++
+}
+if (!rtCounts.loop || !rtCounts['out-and-back'] || !rtCounts.network) {
+  throw new Error(`routeType classes missing: ${JSON.stringify(rtCounts)}`)
+}
+if (rtCounts.loop > rtCounts['out-and-back']) {
+  throw new Error('implausible: more loops than out-and-back trails')
+}
+if (n14 < 10 || n14 > 500) throw new Error(`implausible 14er trail count: ${n14}`)
+if (nSummit < n14) throw new Error('summit trails must include all 14er trails')
+const quandary = idx.find((t) => t.name === 'Quandary Trail')
+if (!quandary?.is14er || !quandary.summits?.includes('Quandary Peak')) {
+  throw new Error(`Quandary Trail not tagged as 14er: ${JSON.stringify(quandary)}`)
+}
+console.log(
+  `route types ${JSON.stringify(rtCounts)}, ${nSummit} summit trails, ${n14} 14er trails`,
+)
+
+// ---- saved lists: CRUD + pure merge ----
+const { createList, deleteList, getLists, toggleTrailInList, mergeListRows } =
+  await import('../src/lib/lists.js')
+
+const list = await createList('Smoke Test List')
+await toggleTrailInList(list.id, quandary.id)
+let lists = await getLists()
+if (!lists.some((l) => l.id === list.id && l.trailIds.includes(quandary.id))) {
+  throw new Error('list create/toggle failed')
+}
+await toggleTrailInList(list.id, quandary.id)
+lists = await getLists()
+if (lists.find((l) => l.id === list.id).trailIds.length !== 0) {
+  throw new Error('toggle did not remove trail')
+}
+await deleteList(list.id)
+if ((await getLists()).some((l) => l.id === list.id)) {
+  throw new Error('soft delete still visible')
+}
+
+// merge: LWW both directions, tombstones, one-sided rows
+const mk = (id, updatedAt, extra = {}) => ({
+  id, name: `L${id}`, trailIds: [], createdAt: 1, updatedAt, deletedAt: null, ...extra,
+})
+const merged = mergeListRows(
+  [mk('a', 5), mk('b', 1), mk('localonly', 3)],
+  [mk('a', 2), mk('b', 9, { deletedAt: 9 }), mk('remoteonly', 4)],
+)
+const byId = new Map(merged.resolved.map((r) => [r.id, r]))
+if (byId.get('a').updatedAt !== 5) throw new Error('merge: local newer must win')
+if (byId.get('b').deletedAt !== 9) throw new Error('merge: remote tombstone must win')
+if (!merged.pushIds.includes('a') || !merged.pushIds.includes('localonly')) {
+  throw new Error(`merge: pushIds wrong: ${merged.pushIds}`)
+}
+if (!merged.writeLocal.some((r) => r.id === 'remoteonly') ||
+    !merged.writeLocal.some((r) => r.id === 'b')) {
+  throw new Error('merge: writeLocal wrong')
+}
+
 console.log(
   `OK: ${stored} trails stored, shapes valid, search index + backfill + queries work, ` +
-    `trailheads sane, tile math + style + region bboxes valid, re-put idempotent`,
+    `trailheads sane, tile math + style + region bboxes valid, summits/14ers/route types ` +
+    `tagged, lists CRUD + merge correct, re-put idempotent`,
 )
 process.exit(0)

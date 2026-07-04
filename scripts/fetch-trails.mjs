@@ -10,12 +10,18 @@
 //   3. derives difficulty from merged length + elevation gain
 //   4. assigns a region and writes chunked GeoJSON to public/data/
 import { mkdir, writeFile } from 'node:fs/promises'
+import { FOURTEENERS } from './fourteeners.mjs'
 
 const BASE =
   'https://gis.colorado.gov/public/rest/services/OIT/Colorado_State_Basemap/MapServer/40/query'
 
 const TRAILHEADS_BASE =
   'https://gis.colorado.gov/public/rest/services/OIT/Colorado_State_Basemap/MapServer/29/query'
+
+// USGS GNIS named landforms — Summit class points for Colorado
+const GNIS_BASE =
+  'https://carto.nationalmap.gov/arcgis/rest/services/geonames/MapServer/5/query'
+const GNIS_WHERE = "state_alpha='CO' AND gaz_featureclass='Summit'"
 
 const WHERE =
   "hiking IS NOT NULL AND hiking NOT IN ('no','No',' ') AND name IS NOT NULL AND name <> ''"
@@ -210,6 +216,90 @@ function nearestTrailhead(lines) {
   return best
 }
 
+// ----------------------------------------------------------------- summits
+
+const SUMMIT_MATCH_MI = 0.0932 // 150 m: trail passes essentially over the top
+const FOURTEENER_MATCH_MI = 0.1864 // 300 m: GNIS point <-> embedded 14er list
+
+let summitGrid = new Map()
+
+function buildSummitGrid(features) {
+  summitGrid = new Map()
+  const seen = new Set()
+  for (const f of features) {
+    const coord =
+      f.geometry?.type === 'MultiPoint'
+        ? f.geometry.coordinates[0]
+        : f.geometry?.coordinates
+    if (!coord) continue
+    const name = clean(f.properties.gaz_name)
+    if (!name) continue
+    // GNIS carries duplicate rows for many summits
+    const dupeKey = `${name}|${coord[0].toFixed(4)}|${coord[1].toFixed(4)}`
+    if (seen.has(dupeKey)) continue
+    seen.add(dupeKey)
+    // pre-associate with a fourteener so trail tagging is a lookup
+    let fourteener = null
+    for (const p of FOURTEENERS) {
+      if (haversineMi(coord, [p.lon, p.lat]) <= FOURTEENER_MATCH_MI) {
+        fourteener = p
+        break
+      }
+    }
+    const key = gridKey(...coord)
+    if (!summitGrid.has(key)) summitGrid.set(key, [])
+    summitGrid.get(key).push({ coord, name, fourteener })
+  }
+}
+
+function validateFourteeners() {
+  const missing = FOURTEENERS.filter(
+    (p) =>
+      ![...summitGrid.values()]
+        .flat()
+        .some((s) => s.fourteener?.name === p.name),
+  )
+  for (const p of missing) {
+    console.warn(`WARNING: no GNIS summit within 300 m of 14er "${p.name}"`)
+  }
+  return missing.length
+}
+
+// summits within SUMMIT_MATCH_MI of any vertex (loops crest mid-line,
+// so endpoints alone are not enough)
+function summitsFor(lines) {
+  const found = new Map()
+  for (const line of lines) {
+    for (const point of line) {
+      const cx = Math.floor(point[0] / CELL)
+      const cy = Math.floor(point[1] / CELL)
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          for (const s of summitGrid.get(`${cx + dx}|${cy + dy}`) ?? []) {
+            if (found.has(s.name)) continue
+            if (haversineMi(point, s.coord) <= SUMMIT_MATCH_MI) {
+              found.set(s.name, s)
+            }
+          }
+        }
+      }
+    }
+  }
+  return [...found.values()]
+}
+
+// ------------------------------------------------------------- route type
+
+const LOOP_CLOSE_MI = 0.0373 // 60 m
+
+function routeTypeOf(lines) {
+  if (lines.length > 1) return 'network'
+  const line = lines[0]
+  return haversineMi(line[0], line[line.length - 1]) <= LOOP_CLOSE_MI
+    ? 'loop'
+    : 'out-and-back'
+}
+
 // ------------------------------------------------------------------- merge
 
 // COTREX elevations are in feet
@@ -256,6 +346,7 @@ function mergeCluster(segments) {
       : { type: 'MultiLineString', coordinates: lines }
 
   const th = nearestTrailhead(lines)
+  const summits = summitsFor(lines)
 
   return {
     type: 'Feature',
@@ -277,6 +368,11 @@ function mergeCluster(segments) {
       seasonality: pickAttr(segments, 'seasonalit'),
       url: pickAttr(segments, 'url'),
       segments: segments.length,
+      routeType: routeTypeOf(lines),
+      summits: summits.length
+        ? summits.map((s) => s.fourteener?.name ?? s.name)
+        : null,
+      is14er: summits.some((s) => s.fourteener),
       trailhead: th
         ? {
             name: clean(th.attrs.name),
@@ -331,6 +427,18 @@ for (let offset = 0; ; offset += PAGE_SIZE) {
 }
 buildTrailheadGrid(trailheadFeatures)
 console.log(`fetched ${trailheadFeatures.length} trailheads`)
+
+const summitFeatures = []
+for (let offset = 0; ; offset += PAGE_SIZE) {
+  const page = await fetchPage(GNIS_BASE, GNIS_WHERE, 'OBJECTID,gaz_name', offset)
+  summitFeatures.push(...page.features)
+  if (!page.features.length || page.features.length < PAGE_SIZE) break
+}
+buildSummitGrid(summitFeatures)
+const missing14ers = validateFourteeners()
+console.log(
+  `fetched ${summitFeatures.length} GNIS summit rows (${missing14ers} 14ers unmatched)`,
+)
 
 const groups = new Map() // "name|manager" -> [{attrs, lines, bbox}]
 let segmentCount = 0

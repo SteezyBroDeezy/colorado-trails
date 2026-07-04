@@ -11,6 +11,23 @@ const LENGTH_OPTIONS = [
   { id: 'epic', label: '10+ mi', test: (mi) => mi > 10 },
 ]
 
+const GAIN_OPTIONS = [
+  { id: 'any', label: 'Any gain', min: 0 },
+  { id: 'g500', label: '500+ ft', min: 500 },
+  { id: 'g1000', label: '1000+', min: 1000 },
+  { id: 'g1500', label: '1500+', min: 1500 },
+  { id: 'g2000', label: '2000+', min: 2000 },
+  { id: 'g2500', label: '2500+', min: 2500 },
+  { id: 'g3000', label: '3000+', min: 3000 },
+]
+
+const ROUTE_OPTIONS = [
+  { id: 'any', label: 'Any style' },
+  { id: 'loop', label: 'Loop' },
+  { id: 'out-and-back', label: 'Out & back' },
+  { id: 'network', label: 'Network' },
+]
+
 const DIFFICULTIES = ['easy', 'moderate', 'hard']
 
 const BADGE = {
@@ -25,11 +42,30 @@ const CHIP_ACTIVE = {
   hard: 'bg-red-600 text-white',
 }
 
+const CHIP_ON = 'bg-emerald-700 text-white'
+const CHIP_OFF = 'bg-gray-100 text-gray-700'
+
+function Chip({ active, activeClass = CHIP_ON, onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-full px-3 py-1 text-sm ${active ? activeClass : CHIP_OFF}`}
+    >
+      {children}
+    </button>
+  )
+}
+
 function SearchPanel({ onSelect, onClose }) {
   const [index, setIndex] = useState(null)
   const [query, setQuery] = useState('')
   const [difficulties, setDifficulties] = useState(new Set())
   const [lengthId, setLengthId] = useState('any')
+  const [gainId, setGainId] = useState('any')
+  const [routeId, setRouteId] = useState('any')
+  const [summitsOnly, setSummitsOnly] = useState(false)
+  const [fourteenersOnly, setFourteenersOnly] = useState(false)
   const inputRef = useRef(null)
 
   useEffect(() => {
@@ -41,11 +77,16 @@ function SearchPanel({ onSelect, onClose }) {
     if (!index) return []
     const q = query.trim().toLowerCase()
     const lengthTest = LENGTH_OPTIONS.find((o) => o.id === lengthId).test
+    const minGain = GAIN_OPTIONS.find((o) => o.id === gainId).min
     const starts = []
     const contains = []
     for (const t of index) {
       if (difficulties.size && !difficulties.has(t.difficulty)) continue
       if (!lengthTest(t.lengthMi)) continue
+      if (minGain && !(t.gainFt >= minGain)) continue
+      if (routeId !== 'any' && t.routeType !== routeId) continue
+      if (fourteenersOnly && !t.is14er) continue
+      if (summitsOnly && !t.summits?.length) continue
       if (q) {
         const name = t.name.toLowerCase()
         const at = name.indexOf(q)
@@ -55,11 +96,14 @@ function SearchPanel({ onSelect, onClose }) {
         starts.push(t)
       }
     }
-    const byName = (a, b) => a.name.localeCompare(b.name) || b.lengthMi - a.lengthMi
-    starts.sort(byName)
-    contains.sort(byName)
+    const cmp =
+      gainId !== 'any'
+        ? (a, b) => (b.gainFt ?? 0) - (a.gainFt ?? 0) || a.name.localeCompare(b.name)
+        : (a, b) => a.name.localeCompare(b.name) || b.lengthMi - a.lengthMi
+    starts.sort(cmp)
+    contains.sort(cmp)
     return [...starts, ...contains]
-  }, [index, query, difficulties, lengthId])
+  }, [index, query, difficulties, lengthId, gainId, routeId, summitsOnly, fourteenersOnly])
 
   function toggleDifficulty(d) {
     setDifficulties((prev) => {
@@ -90,32 +134,53 @@ function SearchPanel({ onSelect, onClose }) {
         </button>
       </div>
 
-      <div className="flex flex-wrap gap-2 border-b border-gray-200 px-3 py-2">
-        {DIFFICULTIES.map((d) => (
-          <button
-            key={d}
-            type="button"
-            onClick={() => toggleDifficulty(d)}
-            className={`rounded-full px-3 py-1 text-sm capitalize ${
-              difficulties.has(d) ? CHIP_ACTIVE[d] : 'bg-gray-100 text-gray-700'
-            }`}
+      <div className="space-y-2 border-b border-gray-200 px-3 py-2">
+        <div className="flex flex-wrap gap-2">
+          <Chip
+            active={summitsOnly}
+            onClick={() => setSummitsOnly((v) => !v)}
           >
-            {d}
-          </button>
-        ))}
-        <span className="mx-1 w-px self-stretch bg-gray-200" />
-        {LENGTH_OPTIONS.map((o) => (
-          <button
-            key={o.id}
-            type="button"
-            onClick={() => setLengthId(o.id)}
-            className={`rounded-full px-3 py-1 text-sm ${
-              lengthId === o.id ? 'bg-emerald-700 text-white' : 'bg-gray-100 text-gray-700'
-            }`}
+            ⛰ Summits
+          </Chip>
+          <Chip
+            active={fourteenersOnly}
+            activeClass="bg-yellow-500 text-yellow-950"
+            onClick={() => setFourteenersOnly((v) => !v)}
           >
-            {o.label}
-          </button>
-        ))}
+            14ers
+          </Chip>
+          <span className="mx-1 w-px self-stretch bg-gray-200" />
+          {DIFFICULTIES.map((d) => (
+            <Chip
+              key={d}
+              active={difficulties.has(d)}
+              activeClass={CHIP_ACTIVE[d]}
+              onClick={() => toggleDifficulty(d)}
+            >
+              <span className="capitalize">{d}</span>
+            </Chip>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {ROUTE_OPTIONS.map((o) => (
+            <Chip key={o.id} active={routeId === o.id} onClick={() => setRouteId(o.id)}>
+              {o.label}
+            </Chip>
+          ))}
+          <span className="mx-1 w-px self-stretch bg-gray-200" />
+          {LENGTH_OPTIONS.map((o) => (
+            <Chip key={o.id} active={lengthId === o.id} onClick={() => setLengthId(o.id)}>
+              {o.label}
+            </Chip>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {GAIN_OPTIONS.map((o) => (
+            <Chip key={o.id} active={gainId === o.id} onClick={() => setGainId(o.id)}>
+              {o.label}
+            </Chip>
+          ))}
+        </div>
       </div>
 
       <p className="px-4 pt-2 text-xs text-gray-500">
@@ -135,16 +200,23 @@ function SearchPanel({ onSelect, onClose }) {
             >
               <div className="flex items-baseline justify-between gap-2">
                 <span className="truncate font-medium text-gray-900">{t.name}</span>
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs capitalize ${BADGE[t.difficulty]}`}>
-                  {t.difficulty}
+                <span className="flex shrink-0 items-center gap-1">
+                  {t.is14er && (
+                    <span className="rounded-full bg-yellow-400 px-2 py-0.5 text-xs font-semibold text-yellow-950">
+                      14er
+                    </span>
+                  )}
+                  <span className={`rounded-full px-2 py-0.5 text-xs capitalize ${BADGE[t.difficulty]}`}>
+                    {t.difficulty}
+                  </span>
                 </span>
               </div>
               <p className="mt-0.5 text-sm text-gray-500">
                 {t.lengthMi} mi
                 {t.gainFt ? ` · ${t.gainFt.toLocaleString()} ft gain` : ''}
+                {t.summits?.length ? ` · ⛰ ${t.summits.join(', ')}` : ''}
                 {' · '}
                 {REGION_NAMES[t.region] ?? t.region}
-                {t.manager ? ` · ${t.manager}` : ''}
               </p>
             </button>
           </li>
