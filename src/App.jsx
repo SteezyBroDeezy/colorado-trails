@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import TrailMap from './components/TrailMap'
 import DownloadCard from './components/DownloadCard'
 import SearchPanel from './components/SearchPanel'
+import TrailDetail from './components/TrailDetail'
 import { ensureTrailIndex, getTrail } from './lib/trails'
 
 function App() {
@@ -20,8 +21,8 @@ function App() {
     })
   }, [])
 
-  async function handleSelect(indexRow) {
-    const trail = await getTrail(indexRow.id)
+  async function handleSelectId(id) {
+    const trail = await getTrail(id)
     setSelected(trail)
     setSearchOpen(false)
   }
@@ -53,10 +54,17 @@ function App() {
       )}
 
       <main className="relative flex-1">
-        <TrailMap trailsVersion={trailsVersion} selected={selected} />
+        <TrailMap
+          trailsVersion={trailsVersion}
+          selected={selected}
+          onSelectId={handleSelectId}
+        />
+        {selected && !searchOpen && (
+          <TrailDetail trail={selected} onClose={() => setSelected(null)} />
+        )}
         {searchOpen && (
           <SearchPanel
-            onSelect={handleSelect}
+            onSelect={(row) => handleSelectId(row.id)}
             onClose={() => setSearchOpen(false)}
           />
         )}

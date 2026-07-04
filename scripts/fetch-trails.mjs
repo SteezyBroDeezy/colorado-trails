@@ -14,6 +14,9 @@ import { mkdir, writeFile } from 'node:fs/promises'
 const BASE =
   'https://gis.colorado.gov/public/rest/services/OIT/Colorado_State_Basemap/MapServer/40/query'
 
+const TRAILHEADS_BASE =
+  'https://gis.colorado.gov/public/rest/services/OIT/Colorado_State_Basemap/MapServer/29/query'
+
 const WHERE =
   "hiking IS NOT NULL AND hiking NOT IN ('no','No',' ') AND name IS NOT NULL AND name <> ''"
 
@@ -160,6 +163,53 @@ function clusterSegments(segments) {
   return [...clusters.values()]
 }
 
+// -------------------------------------------------------------- trailheads
+
+// grid cell ~500 m; a 3x3 neighborhood search covers the 250 m match radius
+const CELL = 0.005
+const MATCH_MI = 0.155 // 250 m
+
+let trailheadGrid = new Map()
+
+function gridKey(lon, lat) {
+  return `${Math.floor(lon / CELL)}|${Math.floor(lat / CELL)}`
+}
+
+function buildTrailheadGrid(features) {
+  trailheadGrid = new Map()
+  for (const f of features) {
+    if (f.geometry?.type !== 'Point') continue
+    const coord = f.geometry.coordinates
+    const key = gridKey(...coord)
+    if (!trailheadGrid.has(key)) trailheadGrid.set(key, [])
+    trailheadGrid.get(key).push({ coord, attrs: f.properties })
+  }
+}
+
+// nearest trailhead within MATCH_MI of any endpoint of the trail's lines
+function nearestTrailhead(lines) {
+  let best = null
+  let bestD = MATCH_MI
+  for (const line of lines) {
+    for (const point of [line[0], line[line.length - 1]]) {
+      const cx = Math.floor(point[0] / CELL)
+      const cy = Math.floor(point[1] / CELL)
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          for (const th of trailheadGrid.get(`${cx + dx}|${cy + dy}`) ?? []) {
+            const d = haversineMi(point, th.coord)
+            if (d < bestD) {
+              bestD = d
+              best = th
+            }
+          }
+        }
+      }
+    }
+  }
+  return best
+}
+
 // ------------------------------------------------------------------- merge
 
 // COTREX elevations are in feet
@@ -205,6 +255,8 @@ function mergeCluster(segments) {
       ? { type: 'LineString', coordinates: lines[0] }
       : { type: 'MultiLineString', coordinates: lines }
 
+  const th = nearestTrailhead(lines)
+
   return {
     type: 'Feature',
     geometry,
@@ -225,16 +277,26 @@ function mergeCluster(segments) {
       seasonality: pickAttr(segments, 'seasonalit'),
       url: pickAttr(segments, 'url'),
       segments: segments.length,
+      trailhead: th
+        ? {
+            name: clean(th.attrs.name),
+            lon: th.coord[0],
+            lat: th.coord[1],
+            bathrooms: clean(th.attrs.bathrooms),
+            fee: clean(th.attrs.fee),
+            water: clean(th.attrs.water),
+          }
+        : null,
     },
   }
 }
 
 // ------------------------------------------------------------------- fetch
 
-async function fetchPage(offset) {
+async function fetchPage(base, where, outFields, offset) {
   const params = new URLSearchParams({
-    where: WHERE,
-    outFields: OUT_FIELDS,
+    where,
+    outFields,
     geometryPrecision: '5',
     outSR: '4326',
     resultOffset: String(offset),
@@ -243,7 +305,7 @@ async function fetchPage(offset) {
     f: 'geojson',
   })
   for (let attempt = 1; ; attempt++) {
-    const res = await fetch(`${BASE}?${params}`)
+    const res = await fetch(`${base}?${params}`)
     if (res.ok) {
       const body = await res.json()
       if (!body.error) return body
@@ -256,11 +318,25 @@ async function fetchPage(offset) {
   }
 }
 
+const trailheadFeatures = []
+for (let offset = 0; ; offset += PAGE_SIZE) {
+  const page = await fetchPage(
+    TRAILHEADS_BASE,
+    '1=1',
+    'OBJECTID,name,bathrooms,fee,water',
+    offset,
+  )
+  trailheadFeatures.push(...page.features)
+  if (!page.features.length || page.features.length < PAGE_SIZE) break
+}
+buildTrailheadGrid(trailheadFeatures)
+console.log(`fetched ${trailheadFeatures.length} trailheads`)
+
 const groups = new Map() // "name|manager" -> [{attrs, lines, bbox}]
 let segmentCount = 0
 
 for (let offset = 0; ; offset += PAGE_SIZE) {
-  const page = await fetchPage(offset)
+  const page = await fetchPage(BASE, WHERE, OUT_FIELDS, offset)
   for (const f of page.features) {
     if (!f.geometry?.coordinates?.length) continue
     const lines = toLines(f.geometry)

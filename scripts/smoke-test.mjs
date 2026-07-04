@@ -95,7 +95,24 @@ if (!hits.length) throw new Error('search over index returned nothing')
 const full = await getTrail(hits[0].id)
 if (!full?.geometry) throw new Error('getTrail missing geometry for search hit')
 
+// trailhead matching: some trails carry one, coords must be sane, and
+// the directions fallback (first vertex) must work for the rest
+const withTh = await db.trails.filter((t) => t.trailhead != null).limit(20).toArray()
+if (!withTh.length) throw new Error('no trails matched to a trailhead')
+for (const t of withTh) {
+  const { lat, lon } = t.trailhead
+  if (!(lat > 36 && lat < 42 && lon > -110 && lon < -102)) {
+    throw new Error(`trail ${t.id}: trailhead outside Colorado (${lat}, ${lon})`)
+  }
+}
+const noTh = await db.trails.filter((t) => t.trailhead == null).first()
+const g = noTh.geometry
+const first = g.type === 'LineString' ? g.coordinates[0] : g.coordinates[0][0]
+if (!Number.isFinite(first[0]) || !Number.isFinite(first[1])) {
+  throw new Error('fallback destination vertex is not numeric')
+}
+
 console.log(
-  `OK: ${stored} trails stored, shapes valid, search index + backfill + queries work, re-put idempotent`,
+  `OK: ${stored} trails stored, shapes valid, search index + backfill + queries work, trailheads sane, re-put idempotent`,
 )
 process.exit(0)

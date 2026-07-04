@@ -65,10 +65,12 @@ function ensureSelectedLayers(map) {
   }
 }
 
-function TrailMap({ trailsVersion, selected }) {
+function TrailMap({ trailsVersion, selected, onSelectId }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const [mapReady, setMapReady] = useState(false)
+  const onSelectIdRef = useRef(onSelectId)
+  onSelectIdRef.current = onSelectId
 
   useEffect(() => {
     const map = new maplibregl.Map({
@@ -134,6 +136,16 @@ function TrailMap({ trailsVersion, selected }) {
             'line-opacity': 0.85,
           },
         })
+        map.on('click', 'trails-line', (e) => {
+          const id = e.features?.[0]?.properties?.id
+          if (id != null) onSelectIdRef.current?.(id)
+        })
+        map.on('mouseenter', 'trails-line', () => {
+          map.getCanvas().style.cursor = 'pointer'
+        })
+        map.on('mouseleave', 'trails-line', () => {
+          map.getCanvas().style.cursor = ''
+        })
       }
       ensureSelectedLayers(map)
     })
@@ -157,8 +169,15 @@ function TrailMap({ trailsVersion, selected }) {
       geometry: selected.geometry,
       properties: {},
     })
+    // leave room for the detail sheet at the bottom
+    const h = containerRef.current?.clientHeight ?? 600
     map.fitBounds(geometryBounds(selected.geometry), {
-      padding: 60,
+      padding: {
+        top: 40,
+        left: 40,
+        right: 40,
+        bottom: Math.min(320, Math.round(h * 0.45)),
+      },
       maxZoom: 14,
       duration: 800,
     })

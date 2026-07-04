@@ -7,49 +7,49 @@
       "name": "Front Range",
       "file": "trails-front-range.json",
       "count": 3851,
-      "bytes": 6577130
+      "bytes": 6766095
     },
     {
       "id": "san-juans",
       "name": "San Juans",
       "file": "trails-san-juans.json",
       "count": 2115,
-      "bytes": 5216805
+      "bytes": 5303673
     },
     {
       "id": "western-slope",
       "name": "Western Slope",
       "file": "trails-western-slope.json",
       "count": 2357,
-      "bytes": 3801808
+      "bytes": 3870815
     },
     {
       "id": "central-mountains",
       "name": "Central Mountains",
       "file": "trails-central-mountains.json",
       "count": 3191,
-      "bytes": 5491421
+      "bytes": 5612000
     },
     {
       "id": "northwest",
       "name": "Northwest",
       "file": "trails-northwest.json",
       "count": 1559,
-      "bytes": 2971220
+      "bytes": 3023068
     },
     {
       "id": "southeast",
       "name": "Southeast",
       "file": "trails-southeast.json",
       "count": 885,
-      "bytes": 1571307
+      "bytes": 1612253
     },
     {
       "id": "eastern-plains",
       "name": "Eastern Plains",
       "file": "trails-eastern-plains.json",
       "count": 22,
-      "bytes": 21068
+      "bytes": 22951
     }
   ]
 }
