@@ -9,4 +9,12 @@
 //   3. Build > Firestore Database > create, production mode, us-central
 //   4. Rules: see README snippet
 //   5. Project settings > Add app > Web, copy the config object here
-export const firebaseConfig = null
+export const firebaseConfig = {
+  apiKey: "AIzaSyA71ZGujwIh9ZDuUGKzanhTV_4dg0hUrKc",
+  authDomain: "colorado-trails.firebaseapp.com",
+  projectId: "colorado-trails",
+  storageBucket: "colorado-trails.firebasestorage.app",
+  messagingSenderId: "923557780173",
+  appId: "1:923557780173:web:85a631fd10289f878ba784"
+}
+
